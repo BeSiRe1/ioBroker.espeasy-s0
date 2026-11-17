@@ -1,0 +1,134 @@
+{
+  "type": "tabs",
+  "i18n": false,
+  "items": {
+    "tabDevices": {
+      "type": "panel",
+      "label": { "en": "Devices", "de": "Geräte" },
+      "items": {
+        "hint": {
+          "type": "staticText",
+          "text": {
+            "en": "Add one row per ESPEasy device. In ESPEasy use the task \"Generic - Pulse counter\" with counter type \"Delta/Total/Time\" and mode type \"Falling\". After the first start enter the reading of your physical meter in the state <device>.meter.setReading.",
+            "de": "Eine Zeile pro ESPEasy-Gerät. In ESPEasy den Task \"Generic - Pulse counter\" mit Counter Type \"Delta/Total/Time\" und Mode Type \"Falling\" verwenden. Nach dem ersten Start den Stand des echten Zählers in den Datenpunkt <Gerät>.meter.setReading eintragen."
+          },
+          "xs": 12, "sm": 12, "md": 12, "lg": 12, "xl": 12
+        },
+        "devices": {
+          "type": "table",
+          "xs": 12, "sm": 12, "md": 12, "lg": 12, "xl": 12,
+          "items": [
+            {
+              "type": "checkbox",
+              "attr": "enabled",
+              "title": { "en": "Active", "de": "Aktiv" },
+              "width": "6%",
+              "default": true
+            },
+            {
+              "type": "text",
+              "attr": "name",
+              "title": { "en": "Name (object ID)", "de": "Name (Objekt-ID)" },
+              "width": "18%",
+              "default": "",
+              "validator": "data.name && data.name.trim().length > 0",
+              "validatorErrorText": "Name required / Name erforderlich",
+              "validatorNoSaveOnError": true
+            },
+            {
+              "type": "text",
+              "attr": "host",
+              "title": { "en": "IP / Host", "de": "IP / Host" },
+              "width": "16%",
+              "default": "",
+              "validator": "data.host && data.host.trim().length > 0",
+              "validatorErrorText": "IP/host required / IP/Host erforderlich",
+              "validatorNoSaveOnError": true
+            },
+            {
+              "type": "text",
+              "attr": "taskName",
+              "title": { "en": "ESPEasy task name", "de": "ESPEasy-Taskname" },
+              "tooltip": { "en": "Empty = first pulse counter task", "de": "Leer = erster Pulse-Counter-Task" },
+              "width": "18%",
+              "default": ""
+            },
+            {
+              "type": "number",
+              "attr": "impulsesPerKWh",
+              "title": { "en": "Impulses / kWh", "de": "Impulse / kWh" },
+              "width": "12%",
+              "min": 1,
+              "default": 1000
+            },
+            {
+              "type": "text",
+              "attr": "valueTotal",
+              "title": { "en": "Value 'Total'", "de": "Wert 'Total'" },
+              "width": "15%",
+              "default": "Total"
+            },
+            {
+              "type": "text",
+              "attr": "valueTime",
+              "title": { "en": "Value 'Time'", "de": "Wert 'Time'" },
+              "width": "15%",
+              "default": "Time"
+            }
+          ]
+        }
+      }
+    },
+    "tabSettings": {
+      "type": "panel",
+      "label": { "en": "Settings", "de": "Einstellungen" },
+      "items": {
+        "pollInterval": {
+          "type": "number",
+          "label": { "en": "Poll interval", "de": "Abfrageintervall" },
+          "help": { "en": "seconds (min. 2)", "de": "Sekunden (min. 2)" },
+          "min": 2,
+          "max": 3600,
+          "default": 10,
+          "xs": 12, "sm": 6, "md": 4, "lg": 3, "xl": 3
+        },
+        "requestTimeout": {
+          "type": "number",
+          "label": { "en": "Request timeout", "de": "Timeout pro Abfrage" },
+          "help": { "en": "milliseconds", "de": "Millisekunden" },
+          "min": 500,
+          "max": 30000,
+          "default": 5000,
+          "xs": 12, "sm": 6, "md": 4, "lg": 3, "xl": 3
+        },
+        "offlineAfterFailures": {
+          "type": "number",
+          "label": { "en": "Offline after failed requests", "de": "Offline nach Fehlversuchen" },
+          "min": 1,
+          "max": 100,
+          "default": 3,
+          "newLine": true,
+          "xs": 12, "sm": 6, "md": 4, "lg": 3, "xl": 3
+        },
+        "maxPowerKW": {
+          "type": "number",
+          "label": { "en": "Max. plausible power", "de": "Max. plausible Leistung" },
+          "help": { "en": "kW - larger jumps are rejected", "de": "kW - größere Sprünge werden verworfen" },
+          "min": 0.1,
+          "max": 10000,
+          "default": 50,
+          "xs": 12, "sm": 6, "md": 4, "lg": 3, "xl": 3
+        },
+        "zeroPowerAfter": {
+          "type": "number",
+          "label": { "en": "Power = 0 after no pulse for", "de": "Leistung = 0 ohne Impuls nach" },
+          "help": { "en": "seconds", "de": "Sekunden" },
+          "min": 10,
+          "max": 86400,
+          "default": 300,
+          "xs": 12, "sm": 6, "md": 4, "lg": 3, "xl": 3
+        }
+      }
+    }
+  }
+}

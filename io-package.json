@@ -1,0 +1,94 @@
+{
+  "common": {
+    "name": "espeasy-s0",
+    "version": "0.1.0",
+    "news": {
+      "0.1.0": {
+        "en": "initial release",
+        "de": "Erstveröffentlichung"
+      }
+    },
+    "titleLang": {
+      "en": "ESPEasy S0 pulse meter",
+      "de": "ESPEasy S0-Impulszähler"
+    },
+    "desc": {
+      "en": "Reliable reading of S0 energy meters via ESPEasy pulse counter (reboot-safe meter reading, power, daily/monthly/yearly consumption)",
+      "de": "Zuverlässiges Auslesen von S0-Energiezählern über den ESPEasy-Pulse-Counter (neustartsicherer Zählerstand, Leistung, Tages-/Monats-/Jahresverbrauch)"
+    },
+    "authors": [
+      "BeSiRe1"
+    ],
+    "keywords": [
+      "espeasy",
+      "s0",
+      "pulse counter",
+      "energy meter",
+      "Stromzähler",
+      "Impulszähler"
+    ],
+    "licenseInformation": {
+      "type": "free",
+      "license": "MIT"
+    },
+    "platform": "Javascript/Node.js",
+    "icon": "espeasy-s0.png",
+    "enabled": true,
+    "extIcon": "https://raw.githubusercontent.com/BeSiRe1/ioBroker.espeasy-s0/main/admin/espeasy-s0.png",
+    "readme": "https://github.com/BeSiRe1/ioBroker.espeasy-s0/blob/main/README.md",
+    "loglevel": "info",
+    "tier": 3,
+    "mode": "daemon",
+    "type": "energy",
+    "compact": true,
+    "connectionType": "local",
+    "dataSource": "poll",
+    "adminUI": {
+      "config": "json"
+    },
+    "dependencies": [
+      {
+        "js-controller": ">=6.0.11"
+      }
+    ],
+    "globalDependencies": [
+      {
+        "admin": ">=7.4.10"
+      }
+    ]
+  },
+  "native": {
+    "pollInterval": 10,
+    "requestTimeout": 5000,
+    "offlineAfterFailures": 3,
+    "maxPowerKW": 50,
+    "zeroPowerAfter": 300,
+    "devices": []
+  },
+  "protectedNative": [],
+  "encryptedNative": [],
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "info",
+      "type": "channel",
+      "common": {
+        "name": "Information"
+      },
+      "native": {}
+    },
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "role": "indicator.connected",
+        "name": "All configured devices reachable",
+        "type": "boolean",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    }
+  ]
+}
