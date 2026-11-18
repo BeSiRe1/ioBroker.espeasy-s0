@@ -62,6 +62,17 @@ Den **Stand des echten Zählers** trägst du in den Instanz-Einstellungen ein (S
 | `info.rebootCount` / `counterResetCount` / `rejectedCount` | Diagnose-Zähler |
 | `internal.state` | gespeicherter Zustand, bitte nicht ändern |
 
+## Sicherung
+
+Löscht man eine Instanz, entfernt ioBroker auch alle ihre Datenpunkte, also Zählerstand und Verbrauchswerte. Deshalb legt der Adapter (abschaltbar in den Einstellungen) zusätzlich eine Sicherung an:
+
+- Datei `0_userdata.0/espeasy-s0/<Gerät>.json` in den ioBroker-Dateien. Sie bleibt beim Löschen der Instanz erhalten und wird von BackItUp mitgesichert.
+- Geschrieben wird sie alle 5 Minuten, beim Tageswechsel, beim Setzen des Zählerstands und beim Stoppen des Adapters.
+- Startet eine Instanz **ohne eigenen Zustand**, z. B. nach einer Neuinstallation, stellt sie Zählerstand und Verbrauch automatisch daraus wieder her und schreibt das als Warnung ins Log. Ein in den Einstellungen geänderter Zählerstand hat Vorrang.
+- Wer bewusst bei 0 anfangen will, löscht die Datei vorher, z. B. über Admin → Dateien → `0_userdata.0`.
+
+Beim Wiederherstellen aus einer ioBroker-Sicherung mit BackItUp bleibt ohnehin alles erhalten, auch der interne Zustand der Instanz.
+
 ## Grenzen
 
 - Impulse, die der ESP zwischen der letzten Abfrage und einem **Stromausfall** gezählt hat, gehen verloren, maximal ein Abfrageintervall. Ein kürzeres Abfrageintervall verringert das.
@@ -74,13 +85,16 @@ Den **Stand des echten Zählers** trägst du in den Instanz-Einstellungen ein (S
 
 Reliable reading of S0 energy meters through an ESPEasy *Generic - Pulse counter* task. The adapter polls `http://<esp>/json`, adds only the differences of the ESP's `Total` value to its own persistent counter, and therefore survives ESP reboots and counter resets. It provides the meter reading (kWh), current power (W), consumption for today, yesterday, month, last month, year and last year, a plausibility filter, and reachability and diagnostics.
 
-ESPEasy settings: counter type `Delta/Total/Time`, mode type `Falling`, debounce below the meter's pulse length (e.g. 30 ms). In the adapter, configure the IP, task name and impulses per kWh. After the first start, write the reading of your physical meter to `meter.setReading`.
+ESPEasy settings: counter type `Delta/Total/Time`, mode type `Falling`, debounce e.g. 100 ms (above contact bounce, below the shortest pulse interval at full load). In the adapter, configure the IP, task name and impulses per kWh, and enter the reading of your physical meter in the instance settings (or write it to `meter.setReading`). Meter reading and consumption are also backed up to `0_userdata.0/espeasy-s0/<device>.json` and restored automatically when a new instance starts without its own state.
 
 ## Changelog
 <!--
     Placeholder for the next version (at the beginning of the line):
     ### **WORK IN PROGRESS**
 -->
+### 0.3.0 (2026-11-18)
+* (BeSiRe1) backup of meter reading and consumption to 0_userdata.0, automatically restored after deleting/re-installing the instance
+
 ### 0.2.0 (2026-11-18)
 * (BeSiRe1) exact power from every pulse interval via optional MQTT Time state
 * (BeSiRe1) power only decays when the next pulse is overdue (no more jumping values)

@@ -9,6 +9,10 @@ const utils = require('@iobroker/adapter-core');
 const counter = require('./lib/counter');
 const periods = require('./lib/periods');
 const espeasy = require('./lib/espeasy');
+const backup = require('./lib/backup');
+
+/** write the backup file at most every 5 minutes (plus day change, set reading, stop) */
+const BACKUP_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Parse a numeric config value.
@@ -43,6 +47,7 @@ class EspeasyS0 extends utils.Adapter {
             offlineAfterFailures: Math.round(num(this.config.offlineAfterFailures, 3, 1)),
             maxPowerKW: num(this.config.maxPowerKW, 50, 0.1),
             zeroPowerAfter: num(this.config.zeroPowerAfter, 300, 10),
+            backupToUserdata: this.config.backupToUserdata !== false,
         };
 
         const list = Array.isArray(this.config.devices) ? this.config.devices : [];
@@ -89,7 +94,11 @@ class EspeasyS0 extends utils.Adapter {
                 timeLastTs: 0, // last message from the external "Time" state
                 powerSource: '',
             });
-            await this.applyConfigReading(this.devices.get(id));
+            const ctx = this.devices.get(id);
+            await this.applyConfigReading(ctx);
+            // show the (restored) values right away, even before the ESP answers
+            await this.saveInternal(ctx);
+            await this.writeValues(ctx, counter.totalKWh(ctx.state, cfg.impulsesPerKWh));
             this.log.info(
                 `Device "${name}" (${host}, task "${cfg.taskName || 'auto'}", ${cfg.impulsesPerKWh} imp/kWh): ` +
                     `meter reading ${counter.totalKWh(this.devices.get(id).state, cfg.impulsesPerKWh)} kWh`,
@@ -271,11 +280,88 @@ class EspeasyS0 extends utils.Adapter {
                 const parsed = JSON.parse(s.val);
                 state = { ...state, ...parsed.state };
                 per = { ...per, ...parsed.periods };
+                return { state, periods: per };
             } catch (e) {
-                this.log.error(`${id}: cannot parse saved counter state (${e.message}) - starting with 0`);
+                this.log.error(`${id}: cannot parse saved counter state (${e.message})`);
+            }
+        }
+
+        // no own state (new instance, e.g. after deleting/re-installing): try the backup
+        if (this.settings.backupToUserdata) {
+            const restored = await this.readBackup(id);
+            if (restored) {
+                this.log.warn(
+                    `${id}: counter state restored from backup ${backup.BACKUP_META_ID}/${backup.backupPath(id)} ` +
+                        `(saved ${restored.savedAt} by ${restored.instance})`,
+                );
+                return {
+                    state: { ...state, ...restored.state },
+                    periods: { ...per, ...restored.periods },
+                };
             }
         }
         return { state, periods: per };
+    }
+
+    /** @param {string} id device id */
+    async readBackup(id) {
+        try {
+            if (!(await this.fileExistsAsync(backup.BACKUP_META_ID, backup.backupPath(id)))) {
+                return null;
+            }
+            const res = await this.readFileAsync(backup.BACKUP_META_ID, backup.backupPath(id));
+            const parsed = backup.parse(res.file);
+            if (!parsed) {
+                this.log.warn(`${id}: backup file is invalid - ignored`);
+            }
+            return parsed;
+        } catch (e) {
+            this.log.debug(`${id}: no backup readable (${e.message})`);
+            return null;
+        }
+    }
+
+    /**
+     * Write the backup file (throttled unless forced).
+     *
+     * @param {DeviceContext} ctx device
+     * @param {boolean} [force] write now
+     */
+    async writeBackup(ctx, force = false) {
+        if (!this.settings.backupToUserdata) {
+            return;
+        }
+        const now = Date.now();
+        if (!force && now - (ctx.lastBackupTs || 0) < BACKUP_INTERVAL_MS) {
+            return;
+        }
+        ctx.lastBackupTs = now;
+        try {
+            await this.ensureBackupMeta();
+            await this.writeFileAsync(
+                backup.BACKUP_META_ID,
+                backup.backupPath(ctx.id),
+                backup.serialize(ctx.cfg, ctx.state, ctx.periods, this.namespace, now),
+            );
+        } catch (e) {
+            this.log.warn(`${ctx.cfg.name}: cannot write backup (${e.message})`);
+        }
+    }
+
+    /** 0_userdata.0 exists in every installation; create it only if it is missing */
+    async ensureBackupMeta() {
+        if (this.backupMetaChecked) {
+            return;
+        }
+        const obj = await this.getForeignObjectAsync(backup.BACKUP_META_ID);
+        if (!obj) {
+            await this.setForeignObjectAsync(backup.BACKUP_META_ID, {
+                type: 'meta',
+                common: { name: 'User files and data', type: 'meta.user' },
+                native: {},
+            });
+        }
+        this.backupMetaChecked = true;
     }
 
     /** @param {DeviceContext} ctx device */
@@ -357,9 +443,12 @@ class EspeasyS0 extends utils.Adapter {
         }
 
         const total = counter.totalKWh(ctx.state, cfg.impulsesPerKWh);
+        const dayBefore = ctx.periods.dayKey;
         ctx.periods = periods.updatePeriods(ctx.periods, total, new Date(now));
         await this.writeValues(ctx, total, reading);
         await this.saveInternal(ctx);
+        // backup every few minutes and always at the day change (yesterday/last month values)
+        await this.writeBackup(ctx, dayBefore !== ctx.periods.dayKey);
     }
 
     /**
@@ -437,6 +526,7 @@ class EspeasyS0 extends utils.Adapter {
         this.log.info(`${ctx.cfg.name}: meter reading set from ${old} to ${total} kWh (${source})`);
         await this.saveInternal(ctx);
         await this.writeValues(ctx, total);
+        await this.writeBackup(ctx, true);
     }
 
     /**
@@ -503,16 +593,19 @@ class EspeasyS0 extends utils.Adapter {
     }
 
     /** @param {() => void} callback callback */
-    onUnload(callback) {
+    async onUnload(callback) {
         try {
             this.stopping = true;
             if (this.pollTimer) {
                 this.clearTimeout(this.pollTimer);
             }
-            callback();
+            for (const ctx of this.devices.values()) {
+                await this.writeBackup(ctx, true);
+            }
         } catch {
-            callback();
+            // ignore
         }
+        callback();
     }
 }
 

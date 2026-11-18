@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "espeasy-s0",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "news": {
+      "0.3.0": {
+        "en": "backup of meter reading and consumption to 0_userdata.0, automatically restored after deleting/re-installing the instance",
+        "de": "Sicherung von Zählerstand und Verbrauch in 0_userdata.0, wird nach Löschen/Neuinstallation der Instanz automatisch wiederhergestellt"
+      },
       "0.2.0": {
         "en": "exact power from every pulse interval via optional MQTT Time state; power only decays when the next pulse is overdue; spurious pulse intervals (contact bounce) are ignored; meter reading can be set in the instance settings",
         "de": "exakte Leistung aus jedem Impulsabstand über optionalen MQTT-Time-Datenpunkt; Leistung klingt erst ab, wenn der nächste Impuls überfällig ist; Störimpulse (Prellen) werden ignoriert; Zählerstand in den Instanz-Einstellungen setzbar"
@@ -67,6 +71,7 @@
     "offlineAfterFailures": 3,
     "maxPowerKW": 50,
     "zeroPowerAfter": 300,
+    "backupToUserdata": true,
     "devices": []
   },
   "protectedNative": [],

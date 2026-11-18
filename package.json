@@ -1,6 +1,6 @@
 {
   "name": "iobroker.espeasy-s0",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Reliable S0 pulse meter reading from ESPEasy pulse counters (kWh, W, daily/monthly/yearly consumption, reboot-safe)",
   "author": {
     "name": "BeSiRe1"
@@ -53,7 +53,7 @@
     "test:package": "mocha test/package --exit",
     "test:integration": "mocha test/integration --exit",
     "test": "npm run test:unit && npm run test:package",
-    "check": "node --check main.js && node --check lib/counter.js && node --check lib/periods.js && node --check lib/espeasy.js",
+    "check": "node --check main.js && node --check lib/counter.js && node --check lib/periods.js && node --check lib/espeasy.js && node --check lib/backup.js",
     "lint": "eslint .",
     "translate": "translate-adapter",
     "release": "release-script"

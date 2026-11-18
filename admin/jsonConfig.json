@@ -141,6 +141,20 @@
           "default": 50,
           "xs": 12, "sm": 6, "md": 4, "lg": 3, "xl": 3
         },
+        "backupToUserdata": {
+          "type": "checkbox",
+          "label": {
+            "en": "Backup counter state to 0_userdata.0 (survives deleting the instance)",
+            "de": "Zählerzustand in 0_userdata.0 sichern (bleibt beim Löschen der Instanz erhalten)"
+          },
+          "help": {
+            "en": "File 0_userdata.0/espeasy-s0/<device>.json, restored automatically by a new instance",
+            "de": "Datei 0_userdata.0/espeasy-s0/<Gerät>.json, wird von einer neuen Instanz automatisch wiederhergestellt"
+          },
+          "default": true,
+          "newLine": true,
+          "xs": 12, "sm": 12, "md": 12, "lg": 12, "xl": 12
+        },
         "zeroPowerAfter": {
           "type": "number",
           "label": { "en": "Power = 0 after no pulse for", "de": "Leistung = 0 ohne Impuls nach" },
