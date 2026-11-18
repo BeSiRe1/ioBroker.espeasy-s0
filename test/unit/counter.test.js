@@ -1,7 +1,15 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { createState, processReading, totalKWh, applyReading } = require('../../lib/counter');
+const {
+    createState,
+    processReading,
+    applyPulseInterval,
+    decay,
+    totalKWh,
+    applyReading,
+    shouldApplyConfigReading,
+} = require('../../lib/counter');
 
 const cfg = { impulsesPerKWh: 800, maxPowerKW: 50, zeroPowerAfter: 300 };
 const T0 = 1_700_000_000_000;
@@ -109,6 +117,73 @@ describe('counter', () => {
         ]);
         const res = processReading(state, { total: 2, uptimeMs: 251000, timeMs: 0 }, cfg, T0 + 250_000);
         assert.equal(res.state.powerW, 18.8);
+    });
+
+    it('keeps the power until the next pulse is overdue', () => {
+        // 7686 ms between pulses = 585.4 W; 5 s later (not overdue) still 585.4 W
+        let { state } = run([
+            { total: 0, uptimeMs: 1000 },
+            { total: 1, uptimeMs: 11000, timeMs: 7686 },
+        ]);
+        let res = processReading(state, { total: 1, uptimeMs: 16000, timeMs: 0 }, cfg, T0 + 15_000);
+        assert.equal(res.state.powerW, 585.5);
+        // 15.4 s after the pulse (overdue): at most one pulse in 15.4 s
+        res = processReading(res.state, { total: 1, uptimeMs: 26000, timeMs: 0 }, cfg, T0 + 25_400);
+        assert.equal(res.state.powerW, 292.2);
+    });
+
+    it('ignores spurious pulse intervals (contact bounce)', () => {
+        // 34 ms would be 132 kW > 50 kW max
+        const { state, results } = run([
+            { total: 0, uptimeMs: 1000 },
+            { total: 2, uptimeMs: 11000, timeMs: 34 },
+        ]);
+        assert.equal(results[1].timeRejected, true);
+        assert.ok(state.powerW < 2000, `power ${state.powerW}`);
+    });
+
+    describe('external pulse intervals (MQTT)', () => {
+        it('sets the exact power from every interval', () => {
+            const res = applyPulseInterval(createState(), 7686, T0, cfg);
+            assert.equal(res.accepted, true);
+            assert.equal(res.state.powerW, 585.5);
+            assert.equal(res.state.lastPulseTs, T0);
+        });
+
+        it('rejects bounce intervals', () => {
+            const res = applyPulseInterval(createState(), 34, T0, cfg);
+            assert.equal(res.accepted, false);
+            assert.equal(res.state.powerW, 0);
+        });
+
+        it('polling does not overwrite the MQTT power, only counts', () => {
+            let { state } = run([{ total: 0, uptimeMs: 1000 }]);
+            state = applyPulseInterval(state, 7686, T0 + 8000, cfg).state;
+            const res = processReading(state, { total: 1, uptimeMs: 11000, timeMs: 0 }, cfg, T0 + 10_000, {
+                externalTime: true,
+            });
+            assert.equal(res.state.pulses, 1);
+            assert.equal(res.state.powerW, 585.5);
+            assert.equal(res.state.lastPulseTs, T0 + 8000);
+        });
+
+        it('decay() lowers the power once the next pulse is overdue', () => {
+            const state = applyPulseInterval(createState(), 7686, T0, cfg).state;
+            assert.equal(decay(state, cfg, T0 + 5000).powerW, 585.5);
+            assert.equal(decay(state, cfg, T0 + 30_000).powerW, 150);
+            assert.equal(decay(state, cfg, T0 + 301_000).powerW, 0);
+        });
+    });
+
+    it('applies the meter reading from the settings only once per value', () => {
+        let state = createState();
+        assert.equal(shouldApplyConfigReading(state, null), false); // empty field
+        assert.equal(shouldApplyConfigReading(state, 70002), true); // first time
+        state = applyReading({ ...state, appliedConfigReading: 70002 }, 70002);
+        state = applyReading(state, 70010); // later corrected via setReading
+        assert.equal(shouldApplyConfigReading(state, 70002), false); // restart, unchanged
+        assert.equal(totalKWh(state, 800), 70010);
+        assert.equal(shouldApplyConfigReading(state, 70020), true); // changed in settings
     });
 
     it('decays power when pulses stop and drops to 0 after timeout', () => {

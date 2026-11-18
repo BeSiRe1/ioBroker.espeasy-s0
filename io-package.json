@@ -1,8 +1,12 @@
 {
   "common": {
     "name": "espeasy-s0",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "news": {
+      "0.2.0": {
+        "en": "exact power from every pulse interval via optional MQTT Time state; power only decays when the next pulse is overdue; spurious pulse intervals (contact bounce) are ignored; meter reading can be set in the instance settings",
+        "de": "exakte Leistung aus jedem Impulsabstand über optionalen MQTT-Time-Datenpunkt; Leistung klingt erst ab, wenn der nächste Impuls überfällig ist; Störimpulse (Prellen) werden ignoriert; Zählerstand in den Instanz-Einstellungen setzbar"
+      },
       "0.1.0": {
         "en": "initial release",
         "de": "Erstveröffentlichung"

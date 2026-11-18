@@ -1,4 +1,6 @@
 node_modules/
+.mcp.json
+.claude/
 .dev-server/
 .vscode/
 .idea/

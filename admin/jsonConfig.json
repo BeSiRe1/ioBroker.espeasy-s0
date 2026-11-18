@@ -22,14 +22,14 @@
               "type": "checkbox",
               "attr": "enabled",
               "title": { "en": "Active", "de": "Aktiv" },
-              "width": "6%",
+              "width": "5%",
               "default": true
             },
             {
               "type": "text",
               "attr": "name",
               "title": { "en": "Name (object ID)", "de": "Name (Objekt-ID)" },
-              "width": "18%",
+              "width": "12%",
               "default": "",
               "validator": "data.name && data.name.trim().length > 0",
               "validatorErrorText": "Name required / Name erforderlich",
@@ -39,7 +39,7 @@
               "type": "text",
               "attr": "host",
               "title": { "en": "IP / Host", "de": "IP / Host" },
-              "width": "16%",
+              "width": "11%",
               "default": "",
               "validator": "data.host && data.host.trim().length > 0",
               "validatorErrorText": "IP/host required / IP/Host erforderlich",
@@ -50,29 +50,51 @@
               "attr": "taskName",
               "title": { "en": "ESPEasy task name", "de": "ESPEasy-Taskname" },
               "tooltip": { "en": "Empty = first pulse counter task", "de": "Leer = erster Pulse-Counter-Task" },
-              "width": "18%",
+              "width": "12%",
               "default": ""
             },
             {
               "type": "number",
               "attr": "impulsesPerKWh",
               "title": { "en": "Impulses / kWh", "de": "Impulse / kWh" },
-              "width": "12%",
+              "width": "8%",
               "min": 1,
               "default": 1000
+            },
+            {
+              "type": "number",
+              "attr": "startReading",
+              "title": { "en": "Set meter reading (kWh)", "de": "Zählerstand setzen (kWh)" },
+              "tooltip": {
+                "en": "Reading of the physical meter. Applied once when entered or changed; empty = keep",
+                "de": "Stand des echten Zählers. Wird einmal übernommen, wenn neu eingetragen oder geändert; leer = beibehalten"
+              },
+              "min": 0,
+              "width": "10%"
+            },
+            {
+              "type": "objectId",
+              "attr": "timeStateId",
+              "title": { "en": "Time state (optional, MQTT)", "de": "Time-Datenpunkt (optional, MQTT)" },
+              "tooltip": {
+                "en": "e.g. mqtt.0.<unit>.<task>.Time - exact power from every pulse interval",
+                "de": "z. B. mqtt.0.<Gerät>.<Task>.Time - exakte Leistung aus jedem Impulsabstand"
+              },
+              "width": "22%",
+              "default": ""
             },
             {
               "type": "text",
               "attr": "valueTotal",
               "title": { "en": "Value 'Total'", "de": "Wert 'Total'" },
-              "width": "15%",
+              "width": "10%",
               "default": "Total"
             },
             {
               "type": "text",
               "attr": "valueTime",
               "title": { "en": "Value 'Time'", "de": "Wert 'Time'" },
-              "width": "15%",
+              "width": "10%",
               "default": "Time"
             }
           ]

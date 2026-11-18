@@ -68,6 +68,11 @@ class EspeasyS0 extends utils.Adapter {
                 valueTotal: String(d.valueTotal || 'Total').trim(),
                 valueTime: String(d.valueTime || 'Time').trim(),
                 impulsesPerKWh: num(d.impulsesPerKWh, 1000, 1),
+                timeStateId: String(d.timeStateId || '').trim(),
+                startReading:
+                    d.startReading === '' || d.startReading === null || d.startReading === undefined
+                        ? null
+                        : num(d.startReading, null, 0),
                 maxPowerKW: this.settings.maxPowerKW,
                 zeroPowerAfter: this.settings.zeroPowerAfter,
             };
@@ -81,10 +86,13 @@ class EspeasyS0 extends utils.Adapter {
                 failures: 0,
                 online: null,
                 lastError: '',
+                timeLastTs: 0, // last message from the external "Time" state
+                powerSource: '',
             });
+            await this.applyConfigReading(this.devices.get(id));
             this.log.info(
                 `Device "${name}" (${host}, task "${cfg.taskName || 'auto'}", ${cfg.impulsesPerKWh} imp/kWh): ` +
-                    `meter reading ${counter.totalKWh(saved.state, cfg.impulsesPerKWh)} kWh`,
+                    `meter reading ${counter.totalKWh(this.devices.get(id).state, cfg.impulsesPerKWh)} kWh`,
             );
         }
 
@@ -94,6 +102,24 @@ class EspeasyS0 extends utils.Adapter {
         }
 
         await this.subscribeStatesAsync('*.meter.setReading');
+
+        /** external "Time" state -> device */
+        this.timeSources = new Map();
+        for (const ctx of this.devices.values()) {
+            const sid = ctx.cfg.timeStateId;
+            if (!sid) {
+                continue;
+            }
+            const obj = await this.getForeignObjectAsync(sid);
+            if (!obj) {
+                this.log.warn(`${ctx.cfg.name}: Time state "${sid}" does not exist - using polling only`);
+                continue;
+            }
+            this.timeSources.set(sid, ctx);
+            await this.subscribeForeignStatesAsync(sid);
+            this.log.info(`${ctx.cfg.name}: power from pulse intervals of "${sid}"`);
+        }
+
         await this.pollAll();
     }
 
@@ -193,6 +219,17 @@ class EspeasyS0 extends utils.Adapter {
             [
                 `${id}.info.rebootCount`,
                 st('number', 'value', { en: 'Detected ESP reboots', de: 'Erkannte ESP-Neustarts' }),
+                'state',
+            ],
+            [
+                `${id}.info.powerSource`,
+                {
+                    ...st('string', 'text', {
+                        en: 'Source of power value (mqtt = exact pulse interval, poll = estimated)',
+                        de: 'Quelle der Leistung (mqtt = exakter Impulsabstand, poll = geschätzt)',
+                    }),
+                    states: { mqtt: 'mqtt', poll: 'poll' },
+                },
                 'state',
             ],
             [
@@ -296,8 +333,13 @@ class EspeasyS0 extends utils.Adapter {
         ctx.failures = 0;
 
         const now = Date.now();
-        const res = counter.processReading(ctx.state, reading, cfg, now);
+        const externalTime = this.isTimeSourceAlive(ctx, now);
+        const res = counter.processReading(ctx.state, reading, cfg, now, { externalTime });
         ctx.state = res.state;
+        await this.setPowerSource(ctx, externalTime ? 'mqtt' : 'poll');
+        if (res.timeRejected) {
+            this.log.info(`${cfg.name}: implausible pulse interval ${reading.timeMs} ms ignored (contact bounce?)`);
+        }
 
         if (res.baseline) {
             this.log.info(`${cfg.name}: baseline set (ESP total ${ctx.state.rawTotal})`);
@@ -357,7 +399,15 @@ class EspeasyS0 extends utils.Adapter {
      * @param {ioBroker.State | null | undefined} state state
      */
     async onStateChange(fullId, state) {
-        if (!state || state.ack) {
+        if (!state) {
+            return;
+        }
+        const timeCtx = this.timeSources && this.timeSources.get(fullId);
+        if (timeCtx) {
+            await this.onPulseInterval(timeCtx, state);
+            return;
+        }
+        if (state.ack) {
             return;
         }
         const m = fullId.match(/^[^.]+\.\d+\.(.+)\.meter\.setReading$/);
@@ -370,14 +420,86 @@ class EspeasyS0 extends utils.Adapter {
             this.log.warn(`${ctx.cfg.name}: invalid meter reading "${state.val}" ignored`);
             return;
         }
+        await this.applyMeterReading(ctx, val, 'state setReading');
+        await this.setState(fullId, val, true);
+    }
+
+    /**
+     * @param {DeviceContext} ctx device
+     * @param {number} val new meter reading (kWh)
+     * @param {string} source for the log
+     */
+    async applyMeterReading(ctx, val, source) {
         const old = counter.totalKWh(ctx.state, ctx.cfg.impulsesPerKWh);
         ctx.state = counter.applyReading(ctx.state, val);
         ctx.periods = periods.shiftPeriods(ctx.periods, val - old);
         const total = counter.totalKWh(ctx.state, ctx.cfg.impulsesPerKWh);
-        this.log.info(`${ctx.cfg.name}: meter reading set from ${old} to ${total} kWh`);
+        this.log.info(`${ctx.cfg.name}: meter reading set from ${old} to ${total} kWh (${source})`);
         await this.saveInternal(ctx);
         await this.writeValues(ctx, total);
-        await this.setState(fullId, val, true);
+    }
+
+    /**
+     * Meter reading from the instance settings: applied only once per entered value,
+     * so saving the settings later (adapter restart) does not reset the meter.
+     *
+     * @param {DeviceContext} ctx device
+     */
+    async applyConfigReading(ctx) {
+        const val = ctx.cfg.startReading;
+        if (!counter.shouldApplyConfigReading(ctx.state, val)) {
+            return;
+        }
+        ctx.state = { ...ctx.state, appliedConfigReading: val };
+        await this.applyMeterReading(ctx, val, 'instance settings');
+    }
+
+    /**
+     * The external "Time" state is fresh if the ESP published it recently
+     * (ESPEasy publishes every task interval, also with Time = 0).
+     *
+     * @param {DeviceContext} ctx device
+     * @param {number} now timestamp
+     */
+    isTimeSourceAlive(ctx, now) {
+        const maxAge = Math.max(15000, 3 * this.settings.pollInterval * 1000);
+        return !!ctx.cfg.timeStateId && ctx.timeLastTs > 0 && now - ctx.timeLastTs <= maxAge;
+    }
+
+    /**
+     * @param {DeviceContext} ctx device
+     * @param {string} source 'mqtt' or 'poll'
+     */
+    async setPowerSource(ctx, source) {
+        if (ctx.powerSource !== source) {
+            ctx.powerSource = source;
+            await this.setState(`${ctx.id}.info.powerSource`, source, true);
+        }
+    }
+
+    /**
+     * Every message of the external "Time" state (e.g. from the MQTT adapter).
+     *
+     * @param {DeviceContext} ctx device
+     * @param {ioBroker.State} state state
+     */
+    async onPulseInterval(ctx, state) {
+        if (state.q || state.ts < ctx.timeLastTs) {
+            return;
+        }
+        ctx.timeLastTs = state.ts;
+        const timeMs = Number(state.val);
+        if (!Number.isFinite(timeMs) || timeMs <= 0) {
+            return; // no pulse in this ESP task interval
+        }
+        const res = counter.applyPulseInterval(ctx.state, timeMs, state.ts, ctx.cfg);
+        if (!res.accepted) {
+            this.log.info(`${ctx.cfg.name}: implausible pulse interval ${timeMs} ms ignored (contact bounce?)`);
+            return;
+        }
+        ctx.state = res.state;
+        await this.setPowerSource(ctx, 'mqtt');
+        await this.setState(`${ctx.id}.meter.power_W`, ctx.state.powerW, true);
     }
 
     /** @param {() => void} callback callback */

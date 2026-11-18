@@ -1,6 +1,6 @@
 {
   "name": "iobroker.espeasy-s0",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reliable S0 pulse meter reading from ESPEasy pulse counters (kWh, W, daily/monthly/yearly consumption, reboot-safe)",
   "author": {
     "name": "BeSiRe1"
